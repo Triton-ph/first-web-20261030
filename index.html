@@ -2,6 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cloudflare 視覺化自由排版模板網站</title>
   <!-- Tailwind CSS CDN -->
@@ -112,12 +113,49 @@
     .smooth-fade {
       transition: all 0.2s ease-in-out;
     }
+  
+    /* 目錄拖曳指標 */
+    .tree-drop-inside {
+      background-color: #e0f2fe !important;
+      border: 1px dashed #0284c7 !important;
+    }
+    .tree-drop-above {
+      border-top: 2px solid #0284c7 !important;
+    }
+    .tree-drop-below {
+      border-bottom: 2px solid #0284c7 !important;
+    }
+    .tree-item-dragging {
+      opacity: 0.4;
+      background-color: #f1f5f9;
+    }
+
+  
+    /* 登入視窗平滑放大浮動動畫 */
+    @keyframes modalScaleFloatIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.68) translateY(24px);
+      }
+      65% {
+        opacity: 1;
+        transform: scale(1.03) translateY(-4px);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    .modal-pop-float {
+      animation: modalScaleFloatIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    }
+
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-white">
 
   <!-- ================= TOP NAVIGATION BAR ================= -->
-  <header class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+  <header id="top-navbar" class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm transition-all" style="display: none;">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
       
       <!-- Left: Mobile Tree Toggle + Logo & Title -->
@@ -226,6 +264,35 @@
     </div>
   </div>
 
+  
+  <!-- ================= 澄鯨文創 LOGO 浮動按鈕 (純淨標識，支援拖曳解鎖) ================= -->
+  <div id="btn-chengjing-brand" class="fixed bottom-6 right-6 z-50 flex items-center transition-transform duration-200 cursor-grab select-none touch-none" title="按住拖曳碰觸水滴以解鎖後台">
+    <button type="button" id="btn-open-chengjing-modal" class="flex items-center gap-2.5 bg-gradient-to-r from-slate-900 via-sky-950 to-slate-900 text-white pl-3 pr-4 py-2 rounded-full shadow-2xl border border-sky-500/40 hover:border-sky-300 hover:shadow-sky-500/30 transition-all duration-300 pointer-events-none">
+      <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-white shadow-sm shrink-0">
+        <i class="fa-solid fa-water text-sm"></i>
+      </div>
+      <span class="text-xs font-bold tracking-wider text-white">澄鯨文創</span>
+    </button>
+  </div>
+  <div id="modal-chengjing-hub" class="hidden"></div>
+
+  <!-- ================= 隨機水滴目標區塊 ================= -->
+  <div id="waterdrop-target" class="fixed z-50 pointer-events-none hidden transition-all duration-300 transform -translate-x-1/2 -translate-y-1/2">
+    <div class="relative flex flex-col items-center justify-center">
+      <div class="absolute -inset-4 rounded-full bg-sky-400/25 animate-ping"></div>
+      <div class="absolute -inset-2 rounded-full bg-gradient-to-tr from-sky-400/30 to-indigo-500/30 blur-sm"></div>
+      
+      <div id="waterdrop-body" class="w-16 h-16 rounded-full bg-gradient-to-tr from-sky-500 via-sky-400 to-indigo-500 flex items-center justify-center text-white shadow-xl shadow-sky-500/40 border-2 border-white/80 transition-transform duration-200">
+        <svg class="w-8 h-8 drop-shadow" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+        </svg>
+      </div>
+      
+      <div class="mt-2 px-2.5 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-xs text-[10px] text-white font-medium shadow-md whitespace-nowrap border border-slate-700/60 flex items-center gap-1">
+        <i class="fa-solid fa-arrow-down-long text-[9px] text-sky-400"></i> 拖曳 LOGO 碰觸水滴以解鎖
+      </div>
+    </div>
+  </div>
   <!-- ================= MAIN WORKSPACE AREA ================= -->
   <main class="flex-1 flex overflow-hidden relative">
 
@@ -233,15 +300,16 @@
     <aside id="sidebar-pages" class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 z-30 transition-all duration-200 shadow-xs">
       
       <!-- Sidebar Header -->
-      <div class="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+      <div class="p-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
         <div class="flex items-center gap-2 text-slate-800 font-bold text-xs">
           <i class="fa-solid fa-sitemap text-sky-600"></i>
-          <span>頁面樹狀目錄</span>
+          <span>目錄</span>
         </div>
-        <!-- Add Page Button (Only in edit mode) -->
-        <button id="btn-add-root-page" class="hidden px-2 py-1 text-[11px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-md border border-sky-200 transition flex items-center gap-1" title="新增頂層主頁面">
+        <!-- 目錄欄位上方提供新增頁面選項 -->
+        <button id="btn-add-page-top" class="hidden px-2.5 py-1 text-[11px] font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-md border border-sky-200 transition items-center gap-1 shadow-2xs" style="display: none;" title="新增頁面至目錄">
           <i class="fa-solid fa-plus text-[10px]"></i> 新增頁面
         </button>
+        <button id="btn-add-root-page" class="hidden"></button>
       </div>
 
       <!-- Current Page Breadcrumb / Status -->
@@ -308,25 +376,104 @@
       </div>
 
       <!-- ================= PAGE BACKGROUND SETTINGS (SHOWS WHEN NO ELEMENT SELECTED) ================= -->
-      <div id="page-background-inspector" class="p-4 space-y-5 text-xs">
+      <div id="page-background-inspector" class="p-4 space-y-4 text-xs">
         <div class="border-b border-slate-200 pb-3">
           <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
             <i class="fa-solid fa-paintbrush text-sky-500"></i> 當前頁面背景設定
           </h3>
-          <p class="text-[11px] text-slate-500 mt-0.5">點選畫布上的元件可編輯個別元件屬性；點選空白處可在此調整本頁背景。</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">點選畫布空白處可在此調整本頁背景色、雙色漸層或自訂圖片。</p>
         </div>
 
-        <!-- Background Color -->
-        <div class="space-y-2">
-          <label class="block font-semibold text-slate-700">頁面背景顏色</label>
+        <!-- 背景模式切換按鈕 (純色 / 雙色漸層 / 圖片) -->
+        <div class="flex p-1 bg-slate-100 rounded-xl gap-1 border border-slate-200">
+          <button type="button" id="btn-bg-tab-gradient" class="flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-white text-sky-700 shadow-xs transition flex items-center justify-center gap-1">
+            <i class="fa-solid fa-circle-half-stroke text-sky-500"></i> 雙色漸層
+          </button>
+          <button type="button" id="btn-bg-tab-color" class="flex-1 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1">
+            <i class="fa-solid fa-fill-drip text-slate-400"></i> 單一純色
+          </button>
+          <button type="button" id="btn-bg-tab-image" class="flex-1 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1">
+            <i class="fa-solid fa-image text-slate-400"></i> 圖片背景
+          </button>
+        </div>
+
+        <!-- ================= 雙色漸層設定區塊 (GRADIENT SECTION) ================= -->
+        <div id="section-bg-gradient" class="space-y-3.5 p-3.5 bg-sky-50/50 rounded-xl border border-sky-100">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-800 flex items-center gap-1.5">
+              <i class="fa-solid fa-palette text-sky-600"></i> 雙色漸層設定
+            </span>
+            <span class="text-[10px] text-sky-600 font-semibold bg-sky-100 px-2 py-0.5 rounded-full">即時預覽</span>
+          </div>
+
+          <!-- 漸層效果即時預覽條 -->
+          <div id="page-grad-preview" class="h-9 rounded-lg border border-slate-300 shadow-inner transition-all duration-200"></div>
+
+          <!-- 顏色一 與 顏色二 -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-medium text-slate-700 mb-1">起始顏色 (Color 1)</label>
+              <div class="flex items-center gap-1.5">
+                <input type="color" id="page-grad-color1-picker" class="w-7 h-7 p-0.5 border border-slate-300 rounded cursor-pointer" value="#0284c7">
+                <input type="text" id="page-grad-color1-hex" class="flex-1 px-2 py-1 border border-slate-300 rounded text-xs font-mono uppercase" value="#0284C7">
+              </div>
+            </div>
+            <div>
+              <label class="block font-medium text-slate-700 mb-1">結束顏色 (Color 2)</label>
+              <div class="flex items-center gap-1.5">
+                <input type="color" id="page-grad-color2-picker" class="w-7 h-7 p-0.5 border border-slate-300 rounded cursor-pointer" value="#0f172a">
+                <input type="text" id="page-grad-color2-hex" class="flex-1 px-2 py-1 border border-slate-300 rounded text-xs font-mono uppercase" value="#0F172A">
+              </div>
+            </div>
+          </div>
+
+          <!-- 漸層樣式與方向選單 -->
+          <div>
+            <label class="block font-medium text-slate-700 mb-1">漸層樣式與方向</label>
+            <select id="page-grad-direction" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white font-medium focus:ring-2 focus:ring-sky-500 focus:outline-none">
+              <option value="radial-out">向外輻射 (Radial Outward - 圓心向外)</option>
+              <option value="radial-in">向內輻射 (Radial Inward - 外圍向內)</option>
+              <option value="to right">由左至右 (Left to Right)</option>
+              <option value="to left">由右至左 (Right to Left)</option>
+              <option value="to bottom">由上至下 (Top to Bottom)</option>
+              <option value="to top">由下至上 (Bottom to Top)</option>
+              <option value="custom">自訂方向角度 (Custom Angle)</option>
+            </select>
+          </div>
+
+          <!-- 自訂角度控制器 (當選擇自訂方向時顯現) -->
+          <div id="page-grad-angle-container" class="space-y-1 hidden">
+            <div class="flex justify-between items-center text-[11px]">
+              <label class="font-medium text-slate-700">自訂漸層角度</label>
+              <span id="page-grad-angle-val" class="font-mono text-sky-700 font-bold">90°</span>
+            </div>
+            <input type="range" id="page-grad-angle" min="0" max="360" value="90" class="w-full accent-sky-600">
+          </div>
+
+          <!-- 熱門精選漸層色票 -->
+          <div>
+            <span class="text-[10px] text-slate-500 block mb-1.5 font-medium">精選高質感漸層色票：</span>
+            <div class="grid grid-cols-3 gap-1.5 text-[10px]">
+              <button type="button" class="btn-grad-preset py-1.5 px-2 rounded-lg text-white font-semibold shadow-2xs truncate" style="background: linear-gradient(135deg, #0284c7, #0f172a);" data-c1="#0284c7" data-c2="#0f172a" data-dir="to right">深海沉著</button>
+              <button type="button" class="btn-grad-preset py-1.5 px-2 rounded-lg text-white font-semibold shadow-2xs truncate" style="background: linear-gradient(135deg, #3b82f6, #9333ea);" data-c1="#3b82f6" data-c2="#9333ea" data-dir="to right">暮光雅紫</button>
+              <button type="button" class="btn-grad-preset py-1.5 px-2 rounded-lg text-white font-semibold shadow-2xs truncate" style="background: linear-gradient(135deg, #f97316, #ec4899);" data-c1="#f97316" data-c2="#ec4899" data-dir="to right">日落暖陽</button>
+              <button type="button" class="btn-grad-preset py-1.5 px-2 rounded-lg text-white font-semibold shadow-2xs truncate" style="background: linear-gradient(135deg, #0d9488, #1e293b);" data-c1="#0d9488" data-c2="#1e293b" data-dir="to right">極光青綠</button>
+              <button type="button" class="btn-grad-preset py-1.5 px-2 rounded-lg text-slate-800 font-semibold shadow-2xs border border-slate-300 truncate" style="background: linear-gradient(135deg, #f8fafc, #cbd5e1);" data-c1="#f8fafc" data-c2="#cbd5e1" data-dir="to right">莫蘭迪灰</button>
+              <button type="button" class="btn-grad-preset py-1.5 px-2 rounded-lg text-white font-semibold shadow-2xs truncate" style="background: linear-gradient(135deg, #6366f1, #14b8a6);" data-c1="#6366f1" data-c2="#14b8a6" data-dir="to right">清新科技</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= 單一純色區塊 ================= -->
+        <div id="section-bg-color" class="space-y-2 hidden">
+          <label class="block font-semibold text-slate-700">頁面背景單色</label>
           <div class="flex items-center gap-2">
             <input type="color" id="page-bg-color-picker" class="w-8 h-8 p-0.5 border border-slate-300 rounded cursor-pointer">
             <input type="text" id="page-bg-color-hex" class="flex-1 px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-mono uppercase" value="#FFFFFF">
           </div>
           
-          <!-- Color Presets -->
           <div>
-            <span class="text-[10px] text-slate-400 block mb-1">熱門推薦色票：</span>
+            <span class="text-[10px] text-slate-400 block mb-1">熱門純色推薦：</span>
             <div class="grid grid-cols-6 gap-1.5">
               <button type="button" class="btn-page-bg-preset h-6 rounded border border-slate-300 shadow-2xs" style="background-color: #ffffff;" data-color="#ffffff" title="純白"></button>
               <button type="button" class="btn-page-bg-preset h-6 rounded border border-slate-300 shadow-2xs" style="background-color: #fdfbf7;" data-color="#fdfbf7" title="米杏白"></button>
@@ -338,8 +485,8 @@
           </div>
         </div>
 
-        <!-- Background Image -->
-        <div class="space-y-2 pt-3 border-t border-slate-200">
+        <!-- ================= 圖片背景區塊 ================= -->
+        <div id="section-bg-image" class="space-y-2 hidden">
           <label class="block font-semibold text-slate-700">自訂頁面背景圖片</label>
           <input type="text" id="page-bg-image-url" placeholder="輸入圖片 URL (https://...)" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none">
           
@@ -443,14 +590,29 @@
           </div>
 
           <!-- Link / Button Element Content -->
-          <div id="prop-group-link" class="space-y-2">
+          <div id="prop-group-link" class="space-y-3">
             <div>
               <label class="block font-medium text-slate-700 mb-1">按鈕/連結標題</label>
               <input type="text" id="prop-link-text" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs">
             </div>
+
+            <!-- 新增區塊：以下拉式選單列出所有目錄頁面提供超連結指定位置 -->
+            <div class="p-2.5 bg-sky-50/70 border border-sky-200 rounded-lg space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="block font-semibold text-slate-800 text-xs flex items-center gap-1">
+                  <i class="fa-solid fa-sitemap text-sky-600"></i> 連結至指定目錄頁面
+                </label>
+                <span class="text-[10px] text-sky-700 bg-sky-100 px-1.5 py-0.2 rounded font-medium">站內跳轉</span>
+              </div>
+              <select id="prop-link-directory-select" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                <option value="">-- 請選擇目錄頁面 --</option>
+              </select>
+              <p class="text-[10px] text-slate-500">選擇後將自動綁定跳轉至該目錄頁面</p>
+            </div>
+
             <div>
-              <label class="block font-medium text-slate-700 mb-1">目標超連結 (URL)</label>
-              <input type="text" id="prop-link-url" placeholder="https://yourdomain.com" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs">
+              <label class="block font-medium text-slate-700 mb-1">自訂超連結網址 (URL)</label>
+              <input type="text" id="prop-link-url" placeholder="https://yourdomain.com 或 #page-id" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs">
             </div>
             <div class="flex items-center gap-2">
               <input type="checkbox" id="prop-link-target" class="rounded text-sky-600 focus:ring-sky-500">
@@ -468,6 +630,7 @@
             
             <div class="flex gap-1">
               <button type="button" id="btn-snippet-yt" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px]">YouTube 影片範例</button>
+              <button type="button" id="btn-snippet-video" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px]">HTML5 影片 (無跨域限制)</button>
               <button type="button" id="btn-snippet-map" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px]">Google 地圖範例</button>
               <button type="button" id="btn-snippet-badge" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px]">標籤徽章</button>
             </div>
@@ -1011,8 +1174,8 @@
           w: 480,
           h: 260,
           zIndex: 5,
-          htmlCode: `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
-  <iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+          htmlCode: `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);background:#000;">
+  <iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" src="https://www.youtube.com/embed/M7lc1UVf-VE?enablejsapi=1" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 </div>`,
           borderRadius: 12,
           opacity: 100,
@@ -1190,6 +1353,11 @@
         canvasEmptyState: document.getElementById('canvas-empty-state'),
         shiftIndicator: document.getElementById('shift-indicator'),
         modeBadge: document.getElementById('mode-badge'),
+        topNavbar: document.getElementById('top-navbar'),
+        btnChengjingBrand: document.getElementById('btn-chengjing-brand'),
+        btnOpenChengjingModal: document.getElementById('btn-open-chengjing-modal'),
+        btnAddPageTop: document.getElementById('btn-add-page-top'),
+        propLinkDirectorySelect: document.getElementById('prop-link-directory-select'),
         btnToggleMode: document.getElementById('btn-toggle-mode'),
         btnModeIcon: document.getElementById('btn-mode-icon'),
         btnModeText: document.getElementById('btn-mode-text'),
@@ -1217,6 +1385,21 @@
         btnClosePageModal: document.getElementById('btn-close-page-modal'),
         btnCancelPageModal: document.getElementById('btn-cancel-page-modal'),
         // Background controls
+        btnBgTabGradient: document.getElementById('btn-bg-tab-gradient'),
+        btnBgTabColor: document.getElementById('btn-bg-tab-color'),
+        btnBgTabImage: document.getElementById('btn-bg-tab-image'),
+        sectionBgGradient: document.getElementById('section-bg-gradient'),
+        sectionBgColor: document.getElementById('section-bg-color'),
+        sectionBgImage: document.getElementById('section-bg-image'),
+        pageGradColor1Picker: document.getElementById('page-grad-color1-picker'),
+        pageGradColor1Hex: document.getElementById('page-grad-color1-hex'),
+        pageGradColor2Picker: document.getElementById('page-grad-color2-picker'),
+        pageGradColor2Hex: document.getElementById('page-grad-color2-hex'),
+        pageGradDirection: document.getElementById('page-grad-direction'),
+        pageGradAngleContainer: document.getElementById('page-grad-angle-container'),
+        pageGradAngle: document.getElementById('page-grad-angle'),
+        pageGradAngleVal: document.getElementById('page-grad-angle-val'),
+        pageGradPreview: document.getElementById('page-grad-preview'),
         pageBgColorPicker: document.getElementById('page-bg-color-picker'),
         pageBgColorHex: document.getElementById('page-bg-color-hex'),
         pageBgImageUrl: document.getElementById('page-bg-image-url'),
@@ -1321,6 +1504,18 @@
           const savedPages = localStorage.getItem('cf_site_multi_pages_data');
           if (savedPages) {
             STATE.pages = JSON.parse(savedPages);
+            // 自動升級修復快取中引發 Error 153 的舊版嵌入代碼
+            STATE.pages.forEach(p => {
+              if (p.elements) {
+                p.elements.forEach(el => {
+                  if (el.type === 'html' && el.htmlCode && el.htmlCode.includes('dQw4w9WgXcQ')) {
+                    el.htmlCode = `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);background:#000;">
+  <iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" src="https://www.youtube.com/embed/M7lc1UVf-VE?enablejsapi=1" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</div>`;
+                  }
+                });
+              }
+            });
           } else {
             STATE.pages = JSON.parse(JSON.stringify(DEFAULT_PAGES));
           }
@@ -1410,19 +1605,55 @@
         });
       }
 
+
+      // 拖曳層級輔助檢查
+      function isDescendant(parentId, childId) {
+        if (parentId === childId) return true;
+        let curr = STATE.pages.find(p => p.id === childId);
+        while (curr && curr.parentId) {
+          if (curr.parentId === parentId) return true;
+          curr = STATE.pages.find(p => p.id === curr.parentId);
+        }
+        return false;
+      }
+
+      function reorderPageBefore(draggedId, targetId) {
+        const draggedItem = STATE.pages.find(p => p.id === draggedId);
+        const list = STATE.pages.filter(p => p.id !== draggedId);
+        const targetIdx = list.findIndex(p => p.id === targetId);
+        if (targetIdx !== -1 && draggedItem) {
+          list.splice(targetIdx, 0, draggedItem);
+          STATE.pages = list;
+        }
+      }
+
+      function reorderPageAfter(draggedId, targetId) {
+        const draggedItem = STATE.pages.find(p => p.id === draggedId);
+        const list = STATE.pages.filter(p => p.id !== draggedId);
+        const targetIdx = list.findIndex(p => p.id === targetId);
+        if (targetIdx !== -1 && draggedItem) {
+          list.splice(targetIdx + 1, 0, draggedItem);
+          STATE.pages = list;
+        }
+      }
+
       function createTreeNodeElement(page, isChild, hasChildren) {
         const item = document.createElement('div');
         const isCurrent = page.id === STATE.currentPageId;
 
-        item.className = `group flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition ${
+        item.className = `tree-node-item group flex items-center justify-between px-2.5 py-1.5 rounded-lg cursor-pointer transition select-none ${
           isCurrent 
             ? 'bg-sky-50 text-sky-700 font-semibold border border-sky-200 shadow-2xs' 
             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
         } ${isChild ? 'tree-branch text-[11px]' : 'text-xs'}`;
 
+        // 支援滑鼠與觸控按住拖曳排序與層級調整
+        item.draggable = STATE.isEditMode;
+        item.dataset.pageId = page.id;
+
         // 左側標籤與圖示
         const leftWrap = document.createElement('div');
-        leftWrap.className = 'flex items-center gap-2 truncate flex-1';
+        leftWrap.className = 'flex items-center gap-2 truncate flex-1 pointer-events-none';
 
         const icon = document.createElement('i');
         if (isChild) {
@@ -1439,61 +1670,144 @@
 
         leftWrap.appendChild(icon);
         leftWrap.appendChild(nameSpan);
-
         item.appendChild(leftWrap);
 
         // 點擊切換頁面
         item.addEventListener('click', (e) => {
-          if (e.target.closest('button')) return; // 點擊操作按鈕不觸發換頁
+          if (e.target.closest('button') || e.target.closest('.page-edit-dropdown')) return;
           switchPage(page.id);
         });
 
-        // 編輯模式專屬快捷按鈕 (新增子頁面、編輯、刪除)
+        // ================= 目錄拖曳排序與層級歸屬 (DRAG & DROP) ================= //
         if (STATE.isEditMode) {
-          const actionGroup = document.createElement('div');
-          actionGroup.className = 'hidden group-hover:flex items-center gap-1 shrink-0';
+          item.addEventListener('dragstart', (e) => {
+            STATE.draggedPageId = page.id;
+            e.dataTransfer.setData('text/plain', page.id);
+            item.classList.add('tree-item-dragging');
+          });
 
-          // 新增子頁面按鈕 (僅主頁面可新增次頁面)
-          if (!isChild) {
-            const btnAddSub = document.createElement('button');
-            btnAddSub.type = 'button';
-            btnAddSub.className = 'p-1 hover:text-sky-600 text-slate-400 rounded hover:bg-white transition';
-            btnAddSub.title = '新增次頁面 (子頁面)';
-            btnAddSub.innerHTML = '<i class="fa-solid fa-plus text-[10px]"></i>';
-            btnAddSub.addEventListener('click', (e) => {
-              e.stopPropagation();
-              openPageModal('add', page.id);
+          item.addEventListener('dragend', () => {
+            item.classList.remove('tree-item-dragging');
+            document.querySelectorAll('.tree-node-item').forEach(el => {
+              el.classList.remove('tree-drop-inside', 'tree-drop-above', 'tree-drop-below');
             });
-            actionGroup.appendChild(btnAddSub);
-          }
+          });
 
-          // 重新命名按鈕
+          item.addEventListener('dragover', (e) => {
+            if (!STATE.draggedPageId || STATE.draggedPageId === page.id) return;
+            e.preventDefault();
+            const rect = item.getBoundingClientRect();
+            const relY = e.clientY - rect.top;
+            const height = rect.height;
+
+            item.classList.remove('tree-drop-inside', 'tree-drop-above', 'tree-drop-below');
+            if (relY < height * 0.25) {
+              item.classList.add('tree-drop-above');
+            } else if (relY > height * 0.75) {
+              item.classList.add('tree-drop-below');
+            } else {
+              item.classList.add('tree-drop-inside');
+            }
+          });
+
+          item.addEventListener('dragleave', () => {
+            item.classList.remove('tree-drop-inside', 'tree-drop-above', 'tree-drop-below');
+          });
+
+          item.addEventListener('drop', (e) => {
+            if (!STATE.draggedPageId || STATE.draggedPageId === page.id) return;
+            e.preventDefault();
+            const draggedId = STATE.draggedPageId;
+            const draggedPage = STATE.pages.find(p => p.id === draggedId);
+            if (!draggedPage) return;
+
+            if (isDescendant(draggedId, page.id)) {
+              showToast('無法將目錄頁面移入自身的子目錄中', 'error');
+              return;
+            }
+
+            const rect = item.getBoundingClientRect();
+            const relY = e.clientY - rect.top;
+            const height = rect.height;
+
+            pushHistory();
+
+            if (relY < height * 0.25) {
+              // 拖至上方：與目標同層級
+              draggedPage.parentId = page.parentId || null;
+              reorderPageBefore(draggedId, page.id);
+              showToast(`已移動「${draggedPage.name}」至「${page.name}」上方`);
+            } else if (relY > height * 0.75) {
+              // 拖至下方：與目標同層級
+              draggedPage.parentId = page.parentId || null;
+              reorderPageAfter(draggedId, page.id);
+              showToast(`已移動「${draggedPage.name}」至「${page.name}」下方`);
+            } else {
+              // 拖至中間：歸屬於該頁面作為次頁面 (子目錄)
+              draggedPage.parentId = page.id;
+              showToast(`已將「${draggedPage.name}」歸入「${page.name}」子目錄下`);
+            }
+
+            STATE.draggedPageId = null;
+            renderPagesTree();
+            renderCurrentPage();
+          });
+        }
+
+        // ================= 各頁面右方顯示「編輯」按鈕與下拉選單 ================= //
+        if (STATE.isEditMode) {
+          const editWrapper = document.createElement('div');
+          editWrapper.className = 'relative shrink-0 ml-1';
+
+          const btnEdit = document.createElement('button');
+          btnEdit.type = 'button';
+          btnEdit.className = 'px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:text-sky-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded transition flex items-center gap-1 shadow-2xs';
+          btnEdit.innerHTML = '編輯 <i class="fa-solid fa-angle-down text-[9px]"></i>';
+
+          const menu = document.createElement('div');
+          menu.className = 'hidden absolute right-0 top-full mt-1 w-28 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-30 text-xs page-edit-dropdown';
+
+          // 重新命名
           const btnRename = document.createElement('button');
           btnRename.type = 'button';
-          btnRename.className = 'p-1 hover:text-sky-600 text-slate-400 rounded hover:bg-white transition';
-          btnRename.title = '重新命名頁面';
-          btnRename.innerHTML = '<i class="fa-solid fa-pen text-[10px]"></i>';
-          btnRename.addEventListener('click', (e) => {
+          btnRename.className = 'w-full px-3 py-1.5 text-left text-slate-700 hover:bg-sky-50 hover:text-sky-700 flex items-center gap-2';
+          btnRename.innerHTML = '<i class="fa-solid fa-pen text-[10px] text-sky-500"></i> 重新命名';
+          btnRename.onclick = (e) => {
             e.stopPropagation();
+            menu.classList.add('hidden');
             openPageModal('edit', null, page);
-          });
-          actionGroup.appendChild(btnRename);
+          };
 
-          // 刪除按鈕 (首頁 page-home 防刪)
-          if (page.id !== 'page-home') {
-            const btnDel = document.createElement('button');
-            btnDel.type = 'button';
-            btnDel.className = 'p-1 hover:text-rose-600 text-slate-400 rounded hover:bg-white transition';
-            btnDel.title = '刪除此頁面';
-            btnDel.innerHTML = '<i class="fa-solid fa-trash-can text-[10px]"></i>';
-            btnDel.addEventListener('click', (e) => {
+          // 刪除
+          const btnDel = document.createElement('button');
+          btnDel.type = 'button';
+          if (page.id === 'page-home') {
+            btnDel.className = 'w-full px-3 py-1.5 text-left text-slate-300 cursor-not-allowed flex items-center gap-2';
+            btnDel.innerHTML = '<i class="fa-solid fa-ban text-[10px]"></i> 首頁不可刪';
+          } else {
+            btnDel.className = 'w-full px-3 py-1.5 text-left text-rose-600 hover:bg-rose-50 flex items-center gap-2';
+            btnDel.innerHTML = '<i class="fa-solid fa-trash-can text-[10px] text-rose-500"></i> 刪除';
+            btnDel.onclick = (e) => {
               e.stopPropagation();
+              menu.classList.add('hidden');
               deletePage(page.id);
-            });
-            actionGroup.appendChild(btnDel);
+            };
           }
 
-          item.appendChild(actionGroup);
+          menu.appendChild(btnRename);
+          menu.appendChild(btnDel);
+
+          btnEdit.onclick = (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.page-edit-dropdown').forEach(d => {
+              if (d !== menu) d.classList.add('hidden');
+            });
+            menu.classList.toggle('hidden');
+          };
+
+          editWrapper.appendChild(btnEdit);
+          editWrapper.appendChild(menu);
+          item.appendChild(editWrapper);
         }
 
         return item;
@@ -1551,29 +1865,131 @@
 
       // ================= PAGE BACKGROUND & CANVAS RENDERING ================= //
 
+
+      // ================= 漸層背景 CSS 計算函式 ================= //
+      function buildGradientCss(grad) {
+        if (!grad) return '';
+        const c1 = grad.color1 || '#0284c7';
+        const c2 = grad.color2 || '#0f172a';
+        const dir = grad.direction || 'to right';
+
+        if (dir === 'to right') {
+          return `linear-gradient(to right, ${c1}, ${c2})`;
+        } else if (dir === 'to left') {
+          return `linear-gradient(to left, ${c1}, ${c2})`;
+        } else if (dir === 'to bottom') {
+          return `linear-gradient(to bottom, ${c1}, ${c2})`;
+        } else if (dir === 'to top') {
+          return `linear-gradient(to top, ${c1}, ${c2})`;
+        } else if (dir === 'radial-out') {
+          return `radial-gradient(circle at center, ${c1} 0%, ${c2} 100%)`;
+        } else if (dir === 'radial-in') {
+          return `radial-gradient(circle at center, ${c2} 0%, ${c1} 100%)`;
+        } else if (dir === 'custom') {
+          const angle = grad.angle !== undefined ? grad.angle : 90;
+          return `linear-gradient(${angle}deg, ${c1}, ${c2})`;
+        }
+        return `linear-gradient(to right, ${c1}, ${c2})`;
+      }
+
+      function ensurePageGradientData(page) {
+        if (!page.bgGradient) {
+          page.bgGradient = {
+            enabled: false,
+            color1: '#0284c7',
+            color2: '#0f172a',
+            direction: 'to right',
+            angle: 90
+          };
+        }
+        if (!page.bgType) {
+          page.bgType = page.bgImage ? 'image' : (page.bgGradient.enabled ? 'gradient' : 'color');
+        }
+      }
+
       function renderCurrentPage() {
         const page = getCurrentPage();
         if (!page) return;
 
-        // 套用頁面背景設定
-        DOM.artboard.style.backgroundColor = page.bgColor || '#ffffff';
-        if (page.bgImage) {
+        ensurePageGradientData(page);
+
+        // 套用頁面背景設定 (支援單色 / 雙色漸層 / 自訂圖片)
+        if (page.bgType === 'gradient' || (page.bgGradient && page.bgGradient.enabled)) {
+          const gradCss = buildGradientCss(page.bgGradient);
+          DOM.artboard.style.backgroundColor = 'transparent';
+          DOM.artboard.style.backgroundImage = gradCss;
+          DOM.artboard.style.backgroundSize = 'cover';
+          DOM.artboard.style.backgroundRepeat = 'no-repeat';
+        } else if (page.bgType === 'image' || page.bgImage) {
+          DOM.artboard.style.backgroundColor = page.bgColor || '#ffffff';
           DOM.artboard.style.backgroundImage = `url("${page.bgImage}")`;
           DOM.artboard.style.backgroundSize = page.bgSize || 'cover';
           DOM.artboard.style.backgroundRepeat = page.bgRepeat || 'no-repeat';
         } else {
+          DOM.artboard.style.backgroundColor = page.bgColor || '#ffffff';
           DOM.artboard.style.backgroundImage = 'none';
         }
 
-        // 同步背景屬性面板值
-        DOM.pageBgColorPicker.value = page.bgColor && page.bgColor.startsWith('#') ? page.bgColor : '#ffffff';
-        DOM.pageBgColorHex.value = page.bgColor || '#ffffff';
-        DOM.pageBgImageUrl.value = page.bgImage ? (page.bgImage.startsWith('data:') ? '(本地自訂圖片)' : page.bgImage) : '';
-        DOM.pageBgSize.value = page.bgSize || 'cover';
-        DOM.pageBgRepeat.value = page.bgRepeat || 'no-repeat';
+        // 同步背景屬性面板與表單控制項
+        syncBackgroundInspectorUI(page);
 
         // 渲染元素
         renderElements();
+      }
+
+      function syncBackgroundInspectorUI(page) {
+        ensurePageGradientData(page);
+
+        // 雙色漸層面板同步
+        if (DOM.pageGradColor1Picker && page.bgGradient) {
+          DOM.pageGradColor1Picker.value = page.bgGradient.color1 || '#0284c7';
+          DOM.pageGradColor1Hex.value = page.bgGradient.color1 || '#0284c7';
+          DOM.pageGradColor2Picker.value = page.bgGradient.color2 || '#0f172a';
+          DOM.pageGradColor2Hex.value = page.bgGradient.color2 || '#0f172a';
+          DOM.pageGradDirection.value = page.bgGradient.direction || 'to right';
+          DOM.pageGradAngle.value = page.bgGradient.angle || 90;
+          DOM.pageGradAngleVal.textContent = (page.bgGradient.angle || 90) + '°';
+          
+          if (DOM.pageGradAngleContainer) {
+            DOM.pageGradAngleContainer.classList.toggle('hidden', page.bgGradient.direction !== 'custom');
+          }
+
+          if (DOM.pageGradPreview) {
+            DOM.pageGradPreview.style.background = buildGradientCss(page.bgGradient);
+          }
+        }
+
+        // 單色與圖片控制項同步
+        if (DOM.pageBgColorPicker) {
+          DOM.pageBgColorPicker.value = page.bgColor && page.bgColor.startsWith('#') ? page.bgColor : '#ffffff';
+          DOM.pageBgColorHex.value = page.bgColor || '#ffffff';
+        }
+        if (DOM.pageBgImageUrl) {
+          DOM.pageBgImageUrl.value = page.bgImage ? (page.bgImage.startsWith('data:') ? '(本地自訂圖片)' : page.bgImage) : '';
+        }
+        if (DOM.pageBgSize) DOM.pageBgSize.value = page.bgSize || 'cover';
+        if (DOM.pageBgRepeat) DOM.pageBgRepeat.value = page.bgRepeat || 'no-repeat';
+
+        // 切換分頁標籤顯示狀態
+        const currentType = page.bgType || (page.bgGradient.enabled ? 'gradient' : (page.bgImage ? 'image' : 'color'));
+        if (DOM.sectionBgGradient && DOM.sectionBgColor && DOM.sectionBgImage) {
+          DOM.sectionBgGradient.classList.toggle('hidden', currentType !== 'gradient');
+          DOM.sectionBgColor.classList.toggle('hidden', currentType !== 'color');
+          DOM.sectionBgImage.classList.toggle('hidden', currentType !== 'image');
+
+          // 標籤樣式高亮
+          DOM.btnBgTabGradient.className = currentType === 'gradient'
+            ? 'flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-white text-sky-700 shadow-xs transition flex items-center justify-center gap-1'
+            : 'flex-1 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1';
+
+          DOM.btnBgTabColor.className = currentType === 'color'
+            ? 'flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-white text-sky-700 shadow-xs transition flex items-center justify-center gap-1'
+            : 'flex-1 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1';
+
+          DOM.btnBgTabImage.className = currentType === 'image'
+            ? 'flex-1 py-1.5 rounded-lg text-[11px] font-bold bg-white text-sky-700 shadow-xs transition flex items-center justify-center gap-1'
+            : 'flex-1 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:text-slate-900 transition flex items-center justify-center gap-1';
+        }
       }
 
       function renderElements() {
@@ -1663,8 +2079,17 @@
             linkTag.style.borderRadius = (elem.borderRadius || 8) + 'px';
 
             if (!STATE.isEditMode) {
-              linkTag.href = elem.linkUrl || '#';
-              if (elem.targetBlank) linkTag.target = '_blank';
+              if (elem.linkUrl && elem.linkUrl.startsWith('#page-')) {
+                const targetId = elem.linkUrl.replace('#', '');
+                linkTag.href = 'javascript:void(0)';
+                linkTag.addEventListener('click', (e) => {
+                  e.preventDefault();
+                  switchPage(targetId);
+                });
+              } else {
+                linkTag.href = elem.linkUrl || '#';
+                if (elem.targetBlank) linkTag.target = '_blank';
+              }
             }
             inner.appendChild(linkTag);
           } 
@@ -1969,6 +2394,18 @@
           DOM.propLinkText.value = elem.linkText || '';
           DOM.propLinkUrl.value = elem.linkUrl || '';
           DOM.propLinkTarget.checked = !!elem.targetBlank;
+
+          // 動態填滿目錄跳轉選單
+          DOM.propLinkDirectorySelect.innerHTML = '<option value="">-- 請選擇目錄頁面 (站內跳轉) --</option>';
+          STATE.pages.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = (p.parentId ? '  ↳ ' : '') + p.name;
+            if (elem.targetPageId === p.id || elem.linkUrl === '#' + p.id) {
+              opt.selected = true;
+            }
+            DOM.propLinkDirectorySelect.appendChild(opt);
+          });
         } else if (elem.type === 'html') {
           DOM.propHtmlCode.value = elem.htmlCode || '';
         }
@@ -2004,6 +2441,135 @@
       // 監聽屬性欄位即時變更
       function attachPropertyChangeListeners() {
         // ================= 頁面背景即時變更 ================= //
+        
+        // ================= 背景模式分頁切換 ================= //
+        DOM.btnBgTabGradient.addEventListener('click', () => {
+          const page = getCurrentPage();
+          if (page) {
+            pushHistory();
+            page.bgType = 'gradient';
+            ensurePageGradientData(page);
+            page.bgGradient.enabled = true;
+            renderCurrentPage();
+            showToast('已切換為雙色漸層背景');
+          }
+        });
+
+        DOM.btnBgTabColor.addEventListener('click', () => {
+          const page = getCurrentPage();
+          if (page) {
+            pushHistory();
+            page.bgType = 'color';
+            ensurePageGradientData(page);
+            page.bgGradient.enabled = false;
+            renderCurrentPage();
+            showToast('已切換為單一純色背景');
+          }
+        });
+
+        DOM.btnBgTabImage.addEventListener('click', () => {
+          const page = getCurrentPage();
+          if (page) {
+            pushHistory();
+            page.bgType = 'image';
+            ensurePageGradientData(page);
+            page.bgGradient.enabled = false;
+            renderCurrentPage();
+            showToast('已切換為自訂圖片背景');
+          }
+        });
+
+        // ================= 雙色漸層即時控制項監聽 ================= //
+        DOM.pageGradColor1Picker.addEventListener('input', function() {
+          const page = getCurrentPage();
+          if (page) {
+            ensurePageGradientData(page);
+            page.bgType = 'gradient';
+            page.bgGradient.enabled = true;
+            page.bgGradient.color1 = this.value;
+            DOM.pageGradColor1Hex.value = this.value;
+            renderCurrentPage();
+          }
+        });
+        DOM.pageGradColor1Hex.addEventListener('change', function() {
+          const page = getCurrentPage();
+          if (page) {
+            ensurePageGradientData(page);
+            page.bgType = 'gradient';
+            page.bgGradient.enabled = true;
+            page.bgGradient.color1 = this.value;
+            try { DOM.pageGradColor1Picker.value = this.value; } catch (_) {}
+            renderCurrentPage();
+          }
+        });
+
+        DOM.pageGradColor2Picker.addEventListener('input', function() {
+          const page = getCurrentPage();
+          if (page) {
+            ensurePageGradientData(page);
+            page.bgType = 'gradient';
+            page.bgGradient.enabled = true;
+            page.bgGradient.color2 = this.value;
+            DOM.pageGradColor2Hex.value = this.value;
+            renderCurrentPage();
+          }
+        });
+        DOM.pageGradColor2Hex.addEventListener('change', function() {
+          const page = getCurrentPage();
+          if (page) {
+            ensurePageGradientData(page);
+            page.bgType = 'gradient';
+            page.bgGradient.enabled = true;
+            page.bgGradient.color2 = this.value;
+            try { DOM.pageGradColor2Picker.value = this.value; } catch (_) {}
+            renderCurrentPage();
+          }
+        });
+
+        DOM.pageGradDirection.addEventListener('change', function() {
+          const page = getCurrentPage();
+          if (page) {
+            pushHistory();
+            ensurePageGradientData(page);
+            page.bgType = 'gradient';
+            page.bgGradient.enabled = true;
+            page.bgGradient.direction = this.value;
+            DOM.pageGradAngleContainer.classList.toggle('hidden', this.value !== 'custom');
+            renderCurrentPage();
+            showToast('漸層樣式已更新：' + this.options[this.selectedIndex].text.split(' (')[0]);
+          }
+        });
+
+        DOM.pageGradAngle.addEventListener('input', function() {
+          const page = getCurrentPage();
+          if (page) {
+            ensurePageGradientData(page);
+            page.bgType = 'gradient';
+            page.bgGradient.enabled = true;
+            page.bgGradient.angle = parseInt(this.value, 10);
+            DOM.pageGradAngleVal.textContent = this.value + '°';
+            renderCurrentPage();
+          }
+        });
+
+        // 精選高質感漸層色票點選
+        document.querySelectorAll('.btn-grad-preset').forEach(btn => {
+          btn.addEventListener('click', function() {
+            const page = getCurrentPage();
+            if (page) {
+              pushHistory();
+              ensurePageGradientData(page);
+              page.bgType = 'gradient';
+              page.bgGradient.enabled = true;
+              page.bgGradient.color1 = this.dataset.c1;
+              page.bgGradient.color2 = this.dataset.c2;
+              page.bgGradient.direction = this.dataset.dir || 'to right';
+              renderCurrentPage();
+              showToast('已套用精選漸層「' + this.textContent + '」');
+            }
+          });
+        });
+
         DOM.pageBgColorPicker.addEventListener('input', function() {
           const page = getCurrentPage();
           if (page) {
@@ -2152,6 +2718,26 @@
           const el = getSelectedElement();
           if (el) { el.linkUrl = this.value; renderElements(); }
         });
+
+        // 目錄頁面超連結下拉選單切換
+        DOM.propLinkDirectorySelect.addEventListener('change', function() {
+          const el = getSelectedElement();
+          if (el && this.value) {
+            pushHistory();
+            const targetP = STATE.pages.find(p => p.id === this.value);
+            el.targetPageId = this.value;
+            el.linkUrl = '#' + this.value;
+            DOM.propLinkUrl.value = '#' + this.value;
+            DOM.propLinkTarget.checked = false;
+            el.targetBlank = false;
+            if (targetP && (!el.linkText || el.linkText === '點擊連結' || el.linkText === '點擊前往連結')) {
+              el.linkText = targetP.name;
+              DOM.propLinkText.value = targetP.name;
+            }
+            renderElements();
+            showToast('已綁定目錄跳轉至「' + (targetP ? targetP.name : this.value) + '」');
+          }
+        });
         DOM.propLinkTarget.addEventListener('change', function() {
           const el = getSelectedElement();
           if (el) { el.targetBlank = this.checked; renderElements(); }
@@ -2162,15 +2748,30 @@
           if (el) { el.htmlCode = this.value; renderElements(); }
         });
 
+        const btnVideo = document.getElementById('btn-snippet-video');
+        if (btnVideo) {
+          btnVideo.addEventListener('click', function() {
+            const el = getSelectedElement();
+            if (el && el.type === 'html') {
+              pushHistory();
+              el.htmlCode = `<video style="width:100%;height:100%;border-radius:12px;object-fit:cover;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);" controls playsinline poster="https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80" src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"></video>`;
+              DOM.propHtmlCode.value = el.htmlCode;
+              renderElements();
+              showToast('已載入 HTML5 影片播放代碼 (支援直連免跨域)');
+            }
+          });
+        }
+
         DOM.btnSnippetYt.addEventListener('click', function() {
           const el = getSelectedElement();
           if (el && el.type === 'html') {
             pushHistory();
-            el.htmlCode = `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;">
-  <iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" src="https://www.youtube-nocookie.com/embed/M7lc1UVf-VE" title="YouTube video" allowfullscreen></iframe>
+            el.htmlCode = `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;background:#000;">
+  <iframe style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" src="https://www.youtube.com/embed/M7lc1UVf-VE?enablejsapi=1" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 </div>`;
             DOM.propHtmlCode.value = el.htmlCode;
             renderElements();
+            showToast('已載入修復版 YouTube 嵌入代碼 (含 ReferrerPolicy)');
           }
         });
 
@@ -2653,6 +3254,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>${title}</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"><\/script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -2674,6 +3276,43 @@
       border-bottom: 2px solid #cbd5e1;
       border-bottom-left-radius: 6px;
     }
+  
+    /* 目錄拖曳指標 */
+    .tree-drop-inside {
+      background-color: #e0f2fe !important;
+      border: 1px dashed #0284c7 !important;
+    }
+    .tree-drop-above {
+      border-top: 2px solid #0284c7 !important;
+    }
+    .tree-drop-below {
+      border-bottom: 2px solid #0284c7 !important;
+    }
+    .tree-item-dragging {
+      opacity: 0.4;
+      background-color: #f1f5f9;
+    }
+
+  
+    /* 登入視窗平滑放大浮動動畫 */
+    @keyframes modalScaleFloatIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.68) translateY(24px);
+      }
+      65% {
+        opacity: 1;
+        transform: scale(1.03) translateY(-4px);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    .modal-pop-float {
+      animation: modalScaleFloatIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    }
+
   </style>
 </head>
 <body class="flex flex-col min-h-screen">
@@ -2701,7 +3340,7 @@
     <aside id="pub-sidebar" class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto">
       <div class="p-3 border-b border-slate-100 bg-slate-50 text-xs font-bold text-slate-700 flex items-center gap-2">
         <i class="fa-solid fa-sitemap text-sky-600"></i>
-        <span>網站目錄</span>
+        <span>目錄</span>
       </div>
       <div id="pub-tree-container" class="p-3 space-y-1 text-xs"></div>
     </aside>
@@ -2757,18 +3396,39 @@
       return item;
     }
 
+    function buildPubGrad(g) {
+      if (!g) return '';
+      const c1 = g.color1 || '#0284c7';
+      const c2 = g.color2 || '#0f172a';
+      const dir = g.direction || 'to right';
+      if (dir === 'to right') return 'linear-gradient(to right, ' + c1 + ', ' + c2 + ')';
+      if (dir === 'to left') return 'linear-gradient(to left, ' + c1 + ', ' + c2 + ')';
+      if (dir === 'to bottom') return 'linear-gradient(to bottom, ' + c1 + ', ' + c2 + ')';
+      if (dir === 'to top') return 'linear-gradient(to top, ' + c1 + ', ' + c2 + ')';
+      if (dir === 'radial-out') return 'radial-gradient(circle at center, ' + c1 + ' 0%, ' + c2 + ' 100%)';
+      if (dir === 'radial-in') return 'radial-gradient(circle at center, ' + c2 + ' 0%, ' + c1 + ' 100%)';
+      if (dir === 'custom') return 'linear-gradient(' + (g.angle || 90) + 'deg, ' + c1 + ', ' + c2 + ')';
+      return 'linear-gradient(to right, ' + c1 + ', ' + c2 + ')';
+    }
+
     function renderPubPage() {
       const page = PAGES.find(p => p.id === curPageId) || PAGES[0];
       const artboard = document.getElementById('pub-artboard');
       const container = document.getElementById('pub-elements-container');
       container.innerHTML = '';
 
-      artboard.style.backgroundColor = page.bgColor || '#ffffff';
-      if (page.bgImage) {
+      if (page.bgType === 'gradient' || (page.bgGradient && page.bgGradient.enabled)) {
+        artboard.style.backgroundColor = 'transparent';
+        artboard.style.backgroundImage = buildPubGrad(page.bgGradient);
+        artboard.style.backgroundSize = 'cover';
+        artboard.style.backgroundRepeat = 'no-repeat';
+      } else if (page.bgType === 'image' || page.bgImage) {
+        artboard.style.backgroundColor = page.bgColor || '#ffffff';
         artboard.style.backgroundImage = 'url("' + page.bgImage + '")';
         artboard.style.backgroundSize = page.bgSize || 'cover';
         artboard.style.backgroundRepeat = page.bgRepeat || 'no-repeat';
       } else {
+        artboard.style.backgroundColor = page.bgColor || '#ffffff';
         artboard.style.backgroundImage = 'none';
       }
 
@@ -2827,8 +3487,19 @@
           }
         } else if (el.type === 'link') {
           const a = document.createElement('a');
-          a.href = el.linkUrl || '#';
-          if (el.targetBlank) a.target = '_blank';
+          if (el.linkUrl && el.linkUrl.startsWith('#page-')) {
+            const targetId = el.linkUrl.replace('#', '');
+            a.href = 'javascript:void(0)';
+            a.onclick = (e) => {
+              e.preventDefault();
+              curPageId = targetId;
+              renderPubTree();
+              renderPubPage();
+            };
+          } else {
+            a.href = el.linkUrl || '#';
+            if (el.targetBlank) a.target = '_blank';
+          }
           a.className = 'w-full h-full flex items-center justify-center font-semibold text-decoration-none';
           a.style.fontFamily = el.fontFamily || "'Inter', sans-serif";
           a.style.fontSize = (el.fontSize || 15) + 'px';
@@ -2900,6 +3571,19 @@
         });
 
         // 取消登入
+        
+        // 目錄上方「新增頁面」按鈕 (僅在登入後台後可點擊)
+        DOM.btnAddPageTop.addEventListener('click', () => {
+          if (STATE.isEditMode) {
+            openPageModal('add', null);
+          }
+        });
+
+        // 點擊畫布任何地方關閉目錄編輯下拉選單
+        window.addEventListener('click', () => {
+          document.querySelectorAll('.page-edit-dropdown').forEach(m => m.classList.add('hidden'));
+        });
+
         DOM.btnCancelLogin.addEventListener('click', () => {
           DOM.modalPassword.classList.add('hidden');
         });
@@ -3019,34 +3703,44 @@
 
       function updateModeUI() {
         if (STATE.isEditMode) {
+          // 編輯模式：展開上方所有區塊元素
+          DOM.topNavbar.style.display = 'block';
+          DOM.btnChengjingBrand.style.display = 'none';
+          
           DOM.modeBadge.textContent = '後台編輯模式';
           DOM.modeBadge.className = 'px-2 py-0.5 text-xs font-semibold rounded-full bg-sky-100 text-sky-800 border border-sky-200';
           DOM.btnModeIcon.className = 'fa-solid fa-lock text-rose-300';
           DOM.btnModeText.textContent = '鎖定並離開後台';
           
+          // 「新增頁面」選項只在登入後台管理系統後才顯示
+          DOM.btnAddPageTop.classList.remove('hidden');
+          DOM.btnAddPageTop.style.display = 'flex';
+
           DOM.editorQuickTools.classList.remove('hidden');
           DOM.editorQuickTools.style.display = 'flex';
           DOM.editorSubbar.classList.remove('hidden');
           DOM.editorSubbar.style.display = 'block';
           DOM.propertiesPanel.classList.remove('hidden');
           DOM.propertiesPanel.style.display = 'flex';
-          DOM.btnAddRootPage.classList.remove('hidden');
           DOM.btnSaveCanvas.classList.remove('hidden');
           DOM.btnExportHtml.classList.remove('hidden');
           DOM.artboard.classList.add('canvas-grid-bg');
         } else {
-          DOM.modeBadge.textContent = '訪客瀏覽模式';
-          DOM.modeBadge.className = 'px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200';
-          DOM.btnModeIcon.className = 'fa-solid fa-lock text-amber-400';
-          DOM.btnModeText.textContent = '登入編輯後台';
+          // 瀏覽模式：隱藏包含「登入編輯後台」的所有上方區塊元素！
+          DOM.topNavbar.style.display = 'none';
+          // 澄鯨文創 LOGO 顯示（預設無法直接點開，需拖曳碰觸水滴解鎖）
+          DOM.btnChengjingBrand.style.display = 'flex';
           
+          // 「新增頁面」選項在瀏覽模式時徹底隱藏
+          DOM.btnAddPageTop.classList.add('hidden');
+          DOM.btnAddPageTop.style.display = 'none';
+
           DOM.editorQuickTools.classList.add('hidden');
           DOM.editorQuickTools.style.display = 'none';
           DOM.editorSubbar.classList.add('hidden');
           DOM.editorSubbar.style.display = 'none';
           DOM.propertiesPanel.classList.add('hidden');
           DOM.propertiesPanel.style.display = 'none';
-          DOM.btnAddRootPage.classList.add('hidden');
           DOM.btnSaveCanvas.classList.add('hidden');
           DOM.btnExportHtml.classList.add('hidden');
           DOM.artboard.classList.remove('canvas-grid-bg');
@@ -3058,9 +3752,156 @@
 
       // ================= INITIALIZATION ================= //
 
+      
+      // ================= 澄鯨文創 LOGO 拖曳碰觸隨機水滴解鎖後台 ================= //
+      function setupDraggableChengjingLogo() {
+        const logo = DOM.btnChengjingBrand;
+        const target = document.getElementById('waterdrop-target');
+        const targetBody = document.getElementById('waterdrop-body');
+        
+        let isDragging = false;
+        let startX, startY;
+        let initialLeft, initialTop;
+        let targetX = 0, targetY = 0;
+        let hasSpawnedTarget = false;
+
+        function resetLogoPosition() {
+          logo.style.transition = 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
+          logo.style.left = '';
+          logo.style.top = '';
+          logo.style.right = '24px';
+          logo.style.bottom = '24px';
+          logo.classList.remove('cursor-grabbing', 'scale-110');
+        }
+
+        function spawnWaterDrop() {
+          const margin = 120;
+          const logoRect = logo.getBoundingClientRect();
+          let rx, ry, dist;
+          let attempts = 0;
+          do {
+            rx = margin + Math.random() * (window.innerWidth - margin * 2);
+            ry = margin + Math.random() * (window.innerHeight - margin * 2);
+            dist = Math.hypot(rx - (logoRect.left + logoRect.width / 2), ry - (logoRect.top + logoRect.height / 2));
+            attempts++;
+          } while (dist < 220 && attempts < 50);
+
+          targetX = rx;
+          targetY = ry;
+          target.style.left = rx + 'px';
+          target.style.top = ry + 'px';
+          target.classList.remove('hidden');
+          hasSpawnedTarget = true;
+        }
+
+        function hideWaterDrop() {
+          target.classList.add('hidden');
+          hasSpawnedTarget = false;
+        }
+
+        function checkCollision(currLogoX, currLogoY) {
+          if (!hasSpawnedTarget) return false;
+          const dist = Math.hypot(currLogoX - targetX, currLogoY - targetY);
+          return dist < 58; // 碰觸判定半徑
+        }
+
+        // 按住開始拖曳 (Pointer / Mouse / Touch)
+        logo.addEventListener('pointerdown', function(e) {
+          if (STATE.isEditMode) return;
+          e.preventDefault();
+          e.stopPropagation();
+
+          isDragging = true;
+          startX = e.clientX;
+          startY = e.clientY;
+
+          const rect = logo.getBoundingClientRect();
+          initialLeft = rect.left;
+          initialTop = rect.top;
+
+          logo.style.transition = 'none';
+          logo.style.right = 'auto';
+          logo.style.bottom = 'auto';
+          logo.style.left = initialLeft + 'px';
+          logo.style.top = initialTop + 'px';
+          logo.classList.add('cursor-grabbing', 'scale-110');
+
+          spawnWaterDrop();
+          logo.setPointerCapture(e.pointerId);
+
+          function onPointerMove(moveEvent) {
+            if (!isDragging) return;
+            moveEvent.preventDefault();
+
+            const dx = moveEvent.clientX - startX;
+            const dy = moveEvent.clientY - startY;
+
+            const newX = initialLeft + dx;
+            const newY = initialTop + dy;
+
+            logo.style.left = newX + 'px';
+            logo.style.top = newY + 'px';
+
+            const logoCenterX = newX + rect.width / 2;
+            const logoCenterY = newY + rect.height / 2;
+
+            if (checkCollision(logoCenterX, logoCenterY)) {
+              isDragging = false;
+              window.removeEventListener('pointermove', onPointerMove);
+              window.removeEventListener('pointerup', onPointerUp);
+              try { logo.releasePointerCapture(e.pointerId); } catch (_) {}
+
+              if (targetBody) {
+                targetBody.classList.add('scale-150', 'bg-emerald-400');
+              }
+              showToast('水滴契合成功！跳出後台管理員登入', 'success');
+
+              setTimeout(() => {
+                hideWaterDrop();
+                resetLogoPosition();
+
+                // 平滑放大浮動動畫彈出登入選項
+                DOM.loginPasswordInput.value = '';
+                DOM.loginErrorMsg.classList.add('hidden');
+                DOM.modalPassword.classList.remove('hidden');
+
+                const modalBox = DOM.modalPassword.querySelector('.bg-white');
+                if (modalBox) {
+                  modalBox.classList.remove('modal-pop-float');
+                  void modalBox.offsetWidth; // 強制重繪
+                  modalBox.classList.add('modal-pop-float');
+                }
+                setTimeout(() => DOM.loginPasswordInput.focus(), 150);
+              }, 200);
+            }
+          }
+
+          function onPointerUp(upEvent) {
+            if (!isDragging) return;
+            isDragging = false;
+            try { logo.releasePointerCapture(upEvent.pointerId); } catch (_) {}
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+
+            hideWaterDrop();
+            resetLogoPosition();
+          }
+
+          window.addEventListener('pointermove', onPointerMove);
+          window.addEventListener('pointerup', onPointerUp);
+        });
+
+        // 預設無法點擊開啟 (單純點擊無效)
+        logo.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+        });
+      }
+
       function init() {
         loadSavedData();
         setupAuthAndMode();
+        setupDraggableChengjingLogo();
         setupAddElementButtons();
         attachPropertyChangeListeners();
         updateModeUI();
