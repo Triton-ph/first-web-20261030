@@ -264,6 +264,25 @@
           d.appendChild(a);
         } else if (el.type === 'html') {
           d.innerHTML = el.htmlCode || '';
+          d.querySelectorAll('iframe').forEach(ifr => {
+            const src = ifr.getAttribute('src') || '';
+            if (/youtube.com|youtu.be|youtube-nocookie.com/i.test(src)) {
+              ifr.removeAttribute('width');
+              ifr.removeAttribute('height');
+              ifr.style.position = 'static';
+              ifr.style.width = '100%';
+              ifr.style.height = '100%';
+              ifr.style.border = '0';
+              ifr.style.display = 'block';
+              if (ifr.parentElement && ifr.parentElement !== d) {
+                ifr.parentElement.style.width = '100%';
+                ifr.parentElement.style.height = '100%';
+                ifr.parentElement.style.paddingBottom = '0';
+                ifr.parentElement.style.position = 'relative';
+                ifr.parentElement.style.overflow = 'hidden';
+              }
+            }
+          });
         }
         container.appendChild(d);
       });
