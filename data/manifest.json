@@ -12,12 +12,12 @@
     },
     {
       "id": "page-about",
-      "name": "關於我們 (About)",
+      "name": "作品集",
       "parentId": null
     },
     {
       "id": "page-team",
-      "name": "核心團隊 (Team)",
+      "name": "一針一線的手做",
       "parentId": "page-about"
     },
     {
