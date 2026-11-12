@@ -8,27 +8,36 @@
     {
       "id": "page-home",
       "name": "首頁 (Home)",
-      "parentId": null
+      "parentId": null,
+      "pageMode": "canvas"
     },
     {
       "id": "page-about",
       "name": "作品集",
-      "parentId": null
+      "parentId": null,
+      "pageMode": "canvas"
     },
     {
       "id": "page-team",
       "name": "一針一線的手做",
-      "parentId": "page-about"
+      "parentId": "page-about",
+      "pageMode": "canvas"
     },
     {
       "id": "page-hp89uly83",
       "name": "奇怪的小工具",
-      "parentId": null
+      "parentId": null,
+      "pageMode": "canvas"
     },
     {
-      "id": "page-exoa1gbp8",
+      "id": "page-cxcjz4j2a",
       "name": "寶可夢小工具",
-      "parentId": "page-hp89uly83"
+      "parentId": "page-hp89uly83",
+      "pageMode": "fullhtml",
+      "appPath": "./apps/page-cxcjz4j2a.html",
+      "fullhtmlNavPos": "topbar",
+      "fullhtmlFitMode": "auto-height",
+      "fullhtmlScale": 1
     }
   ]
 }

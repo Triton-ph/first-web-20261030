@@ -55,7 +55,8 @@
       <div id="pub-tree-container" class="pub-tree"></div>
     </aside>
 
-    <main class="pub-main">
+    <main id="pub-main" class="pub-main">
+      <iframe id="pub-fullhtml-frame" class="hidden" style="width:100%;height:100vh;border:0;background:#fff;" sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-same-origin"></iframe>
       <div id="pub-artboard" class="pub-artboard">
         <div id="pub-elements-container" class="pub-elements"></div>
       </div>
@@ -124,13 +125,70 @@
 
     async function navigateToPage(pageId, updateHash = true) {
       if (!MANIFEST || !MANIFEST.pages.length) return;
-      const exists = MANIFEST.pages.some(p => p.id === pageId);
-      const targetId = exists ? pageId : (MANIFEST.defaultPageId || MANIFEST.pages[0].id);
+      const meta = MANIFEST.pages.find(p => p.id === pageId) || MANIFEST.pages.find(p => p.id === MANIFEST.defaultPageId) || MANIFEST.pages[0];
+      const targetId = meta.id;
       curPageId = targetId;
       if (updateHash && location.hash !== '#' + targetId) {
         location.hash = '#' + targetId;
       }
       renderPubTree();
+
+      const mainEl = document.getElementById('pub-main');
+      const fullFrame = document.getElementById('pub-fullhtml-frame');
+      const artboard = document.getElementById('pub-artboard');
+
+      const toggleBtn = document.getElementById('pub-btn-toggle');
+      if (meta.pageMode === 'fullhtml') {
+        const navPos = meta.fullhtmlNavPos || 'topbar';
+        const fitMode = meta.fullhtmlFitMode || 'auto-height';
+        const scaleVal = parseFloat(meta.fullhtmlScale || '1') || 1;
+        if (toggleBtn) {
+          if (navPos === 'bottom-left') {
+            toggleBtn.style.top = 'auto'; toggleBtn.style.bottom = '16px'; toggleBtn.style.left = '16px';
+          } else {
+            toggleBtn.style.bottom = 'auto'; toggleBtn.style.top = '10px'; toggleBtn.style.left = '12px';
+          }
+        }
+        if (artboard) artboard.classList.add('hidden');
+        if (mainEl) {
+          mainEl.style.padding = (navPos === 'topbar') ? '48px 0 0 0' : '0';
+          mainEl.style.overflow = 'auto';
+        }
+        if (fullFrame) {
+          fullFrame.classList.remove('hidden');
+          if (scaleVal !== 1) {
+            fullFrame.style.transform = 'scale(' + scaleVal + ')';
+            fullFrame.style.transformOrigin = 'top left';
+            fullFrame.style.width = (100 / scaleVal).toFixed(2) + '%';
+          } else {
+            fullFrame.style.transform = '';
+            fullFrame.style.width = '100%';
+          }
+          const fitHeight = () => {
+            if (fitMode === 'viewport') {
+              const h = navPos === 'topbar' ? (window.innerHeight - 48) : window.innerHeight;
+              fullFrame.style.height = (scaleVal !== 1 ? Math.round(h / scaleVal) : h) + 'px';
+            } else {
+              try {
+                const doc = fullFrame.contentDocument || fullFrame.contentWindow.document;
+                if (doc && doc.documentElement) {
+                  const ch = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0, 600);
+                  fullFrame.style.height = ch + 'px';
+                }
+              } catch (_) { fullFrame.style.height = '100vh'; }
+            }
+          };
+          fullFrame.onload = () => { fitHeight(); setTimeout(fitHeight, 400); };
+          fullFrame.src = meta.appPath || ('./apps/' + encodeURIComponent(targetId) + '.html');
+        }
+        return;
+      }
+
+      if (toggleBtn) { toggleBtn.style.bottom = 'auto'; toggleBtn.style.top = '16px'; toggleBtn.style.left = '16px'; }
+      if (fullFrame) { fullFrame.classList.add('hidden'); fullFrame.src = 'about:blank'; }
+      if (artboard) artboard.classList.remove('hidden');
+      if (mainEl) { mainEl.style.padding = '16px 32px'; mainEl.style.overflow = 'auto'; }
+
       const page = await loadPageData(targetId);
       renderPubPage(page);
     }
@@ -263,26 +321,51 @@
           }
           d.appendChild(a);
         } else if (el.type === 'html') {
-          d.innerHTML = el.htmlCode || '';
-          d.querySelectorAll('iframe').forEach(ifr => {
-            const src = ifr.getAttribute('src') || '';
-            if (/youtube.com|youtu.be|youtube-nocookie.com/i.test(src)) {
-              ifr.removeAttribute('width');
-              ifr.removeAttribute('height');
-              ifr.style.position = 'static';
-              ifr.style.width = '100%';
-              ifr.style.height = '100%';
-              ifr.style.border = '0';
-              ifr.style.display = 'block';
-              if (ifr.parentElement && ifr.parentElement !== d) {
-                ifr.parentElement.style.width = '100%';
-                ifr.parentElement.style.height = '100%';
-                ifr.parentElement.style.paddingBottom = '0';
-                ifr.parentElement.style.position = 'relative';
-                ifr.parentElement.style.overflow = 'hidden';
+          const code = el.htmlCode || '';
+          if (/<script|<!doctype|<html/i.test(code)) {
+            d.innerHTML = '';
+            const ifr = document.createElement('iframe');
+            ifr.style.width = '100%';
+            ifr.style.height = '100%';
+            ifr.style.border = '0';
+            ifr.style.display = 'block';
+            ifr.style.backgroundColor = '#ffffff';
+            ifr.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-same-origin');
+            ifr.setAttribute('loading', 'lazy');
+            const baseHref = location.href.split('#')[0];
+            const baseTag = baseHref ? '<base href="' + baseHref.replace(/"/g, '&quot;') + '">' : '';
+            if (/<html|<!doctype/i.test(code)) {
+              if (/<head[^>]*>/i.test(code)) {
+                ifr.srcdoc = code.replace(/<head[^>]*>/i, function(m) { return m + baseTag; });
+              } else {
+                ifr.srcdoc = code.replace(/<html[^>]*>/i, function(m) { return m + '<head>' + baseTag + '</head>'; });
               }
+            } else {
+              ifr.srcdoc = '<!DOCTYPE html><html><head><meta charset="UTF-8">' + baseTag + '<style>html,body{margin:0;padding:0;width:100%;height:100%;}</style></head><body>' + code + '</body></html>';
             }
-          });
+            d.appendChild(ifr);
+          } else {
+            d.innerHTML = code;
+            d.querySelectorAll('iframe').forEach(ifr => {
+              const src = ifr.getAttribute('src') || '';
+              if (/youtube.com|youtu.be|youtube-nocookie.com/i.test(src)) {
+                ifr.removeAttribute('width');
+                ifr.removeAttribute('height');
+                ifr.style.position = 'static';
+                ifr.style.width = '100%';
+                ifr.style.height = '100%';
+                ifr.style.border = '0';
+                ifr.style.display = 'block';
+                if (ifr.parentElement && ifr.parentElement !== d) {
+                  ifr.parentElement.style.width = '100%';
+                  ifr.parentElement.style.height = '100%';
+                  ifr.parentElement.style.paddingBottom = '0';
+                  ifr.parentElement.style.position = 'relative';
+                  ifr.parentElement.style.overflow = 'hidden';
+                }
+              }
+            });
+          }
         }
         container.appendChild(d);
       });
